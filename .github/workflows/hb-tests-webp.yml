@@ -148,11 +148,16 @@ jobs:
               # settings reached it, not an exact size -- the failure being
               # guarded against is the default 1600x900, an order away from
               # either.
+              # Cropped means below the band an uncropped render sits in,
+              # on at least one axis -- how much smaller depends on how much
+              # of the frame the board fills, which is a property of the test
+              # board, not of the feature. One axis rather than both: a board
+              # that is wide and short only loses height.
               if want_cropped:
-                  if w * h >= req_w * req_h * 0.5:
-                      fails.append(f"{path} is {w}x{h}, barely under the "
-                                   f"requested {req_w}x{req_h}; autoframing "
-                                   f"did not crop to the board")
+                  if w >= req_w * 0.9 and h >= req_h * 0.9:
+                      fails.append(f"{path} is {w}x{h}, inside the range an "
+                                   f"uncropped {req_w}x{req_h} render occupies; "
+                                   f"autoframing did not crop to the board")
               elif not (req_w * 0.9 <= w <= req_w and req_h * 0.9 <= h <= req_h):
                   fails.append(f"{path} is {w}x{h}, outside tolerance of the "
                                f"requested {req_w}x{req_h}; the render settings "
