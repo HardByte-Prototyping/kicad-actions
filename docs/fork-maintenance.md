@@ -12,6 +12,27 @@ scripts/install-hooks.sh
 This is per-clone setup and a fresh clone needs it again. Run it before your
 first commit.
 
+## Branching
+
+Work starts on a feature branch — `feat/<topic>`, matching the `feat/glb-export`
+this fork has used before — created before the first file is touched, not after
+the work is done.
+
+The reason is recovery, not ceremony. Uncommitted work on `main` that spans a
+change of direction has to be unpicked file by file; the same work sitting on a
+branch is dropped by dropping a commit. Commit each unit as soon as it stands on
+its own, and especially before starting anything exploratory.
+
+`scripts/hooks/pre-commit` enforces this through `scripts/check-branch.sh`,
+which refuses a commit typed on `main` or `master`. It stays out of the way of
+merges, rebases, cherry-picks and reverts, so landing a finished branch on
+`main` works normally. A commit that genuinely belongs on `main` goes through
+with `git commit --no-verify` — the hook is a guard, not a cage.
+
+Nothing is lost when it fires. The commit was refused before it existed, so the
+staged changes are still staged: `git switch -c feat/<topic>` carries them onto
+the new branch and the commit proceeds there.
+
 ## Publishing identity
 
 Every commit this fork adds on top of upstream is published as
