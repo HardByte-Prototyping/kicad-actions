@@ -37,6 +37,13 @@ jobs:
           # The check walks this fork's whole commit range against upstream,
           # so a shallow clone is not enough.
           fetch-depth: 0
+          # On a pull_request, checkout defaults to refs/pull/N/merge: a commit
+          # GitHub builds server-side and authors with the account that opened
+          # the PR, not with the identity the hooks enforce. Validating that
+          # commit fails the guard on every PR over a commit nobody here wrote,
+          # and a guard that cries wolf is one people learn to ignore. Check
+          # the branch's own head, which is what the hooks actually signed off.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Check commit and tag identity
         # The whole fork range, not just what this push added: a bad commit
