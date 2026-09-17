@@ -95,12 +95,14 @@ jobs:
         run: |
           python3 - "${{ matrix.expected_file }}" \
                     "${{ matrix.expect_lossless || 'false' }}" \
-                    "${{ matrix.expect_cropped || 'false' }}" <<'PY'
+                    "${{ matrix.expect_cropped || 'false' }}" \
+                    800 600 <<'PY'
           import sys
 
-          path, want_lossless, want_cropped = sys.argv[1:4]
+          path, want_lossless, want_cropped, req_w, req_h = sys.argv[1:6]
           want_lossless = want_lossless == "true"
           want_cropped = want_cropped == "true"
+          req_w, req_h = int(req_w), int(req_h)
           fails = []
 
           def webp_info(p):
@@ -141,13 +143,20 @@ jobs:
               if not want_lossless and coding != "lossy":
                   fails.append(f"{path} is {coding}, but lossy was expected")
 
+              # kicad-cli treats width and height as a request rather than a
+              # promise: 800x600 comes back 784x592. So this asserts the
+              # settings reached it, not an exact size -- the failure being
+              # guarded against is the default 1600x900, an order away from
+              # either.
               if want_cropped:
-                  if (w, h) == (800, 600):
-                      fails.append(f"{path} is still the requested 800x600, so "
-                                   f"autoframing did not crop the render")
-              elif (w, h) != (800, 600):
-                  fails.append(f"{path} is {w}x{h}, not the requested 800x600; "
-                               f"the render settings did not reach kicad-cli")
+                  if w * h >= req_w * req_h * 0.5:
+                      fails.append(f"{path} is {w}x{h}, barely under the "
+                                   f"requested {req_w}x{req_h}; autoframing "
+                                   f"did not crop to the board")
+              elif not (req_w * 0.9 <= w <= req_w and req_h * 0.9 <= h <= req_h):
+                  fails.append(f"{path} is {w}x{h}, outside tolerance of the "
+                               f"requested {req_w}x{req_h}; the render settings "
+                               f"did not reach kicad-cli")
 
           for f in fails:
               print(f"::error::{f}")

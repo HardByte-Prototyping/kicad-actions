@@ -227,6 +227,11 @@ tying the two together would mean neither could move without the other. Set
 both blocks to the same values and you get the same picture in both formats,
 at the cost of rendering it twice.
 
+`pcb_output_webp_width` and `pcb_output_webp_height` are a request, not a
+promise: kicad-cli renders close to them but not exactly, returning 784x592 for
+a requested 800x600. If something downstream needs an exact canvas — a shop
+grid, say — resize there rather than assuming these values land.
+
 ### Framing and quality
 
 `pcb_output_webp_autoframe` crops to the board before converting, the same
