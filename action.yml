@@ -386,6 +386,10 @@ inputs:
     description: "Transparent border autoframing keeps, as a fraction of the cropped size. Default '0.04'."
     default: "0.04"
 
+  pcb_output_image_use_board_stackup_colors:
+    description: "Render with the colours defined in the board's physical stackup instead of the 3D viewer preset's. Without this, kicad-cli renders every board in its default colours -- a green soldermask whatever the stackup says -- because '--use-board-stackup-colors' is opt-in. Needs the stackup to actually carry colours: Board Setup -> Physical Stackup in KiCad."
+    default: false
+
   # PCB WebP output
   pcb_output_webp:
     description: "Run the WebP export of the PCB. kicad-cli renders PNG and JPEG only, so this renders and converts: the PNG is an intermediate and is removed, leaving only the WebP. Independent of 'pcb_output_image' -- set both, with the same settings, to get the same picture in both formats."
@@ -430,6 +434,10 @@ inputs:
   pcb_output_webp_rotate:
     description: "Rotation of the WebP PCB. Format: 'x,y,z'."
     default: "0,0,0"
+
+  pcb_output_webp_use_board_stackup_colors:
+    description: "Render with the colours defined in the board's physical stackup instead of the 3D viewer preset's. Same setting as 'pcb_output_image_use_board_stackup_colors', and off by default for the same reason: it matches what kicad-cli does on its own."
+    default: false
 
   pcb_output_webp_autoframe:
     description: "Crop the render to the board using its alpha channel before converting, so the board is centred and the dead margin is trimmed. Needs 'pcb_output_webp_background' left at 'default' or set to 'transparent'. Changes the output dimensions: the result is the board plus the margin, not the requested width and height."

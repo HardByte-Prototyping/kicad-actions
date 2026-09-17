@@ -87,6 +87,7 @@ if [[ $INPUT_PCB_OUTPUT_WEBP == "true" ]]; then
     --zoom "$INPUT_PCB_OUTPUT_WEBP_ZOOM" \
     --rotate "$INPUT_PCB_OUTPUT_WEBP_ROTATE" \
   )
+  [[ $INPUT_PCB_OUTPUT_WEBP_USE_BOARD_STACKUP_COLORS == "true" ]] && cmd+=(--use-board-stackup-colors)
   [[ $INPUT_PCB_OUTPUT_WEBP_PERSPECTIVE == "true" ]] && cmd+=(--perspective)
   [[ $INPUT_PCB_OUTPUT_WEBP_FLOOR == "true" ]] && cmd+=(--floor)
   "${cmd[@]}" "$INPUT_PCB_FILE_NAME"

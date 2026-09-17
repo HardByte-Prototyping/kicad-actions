@@ -40,6 +40,13 @@ jobs:
             expected_file: pcb.webp
             pcb_output_webp_autoframe: "true"
             expect_cropped: "true"
+          # The test board carries no stackup, so this cannot assert a
+          # colour. What it asserts is that kicad-cli accepts the flag at all
+          # -- a wrong name fails the render, and that failure belongs here
+          # rather than on a board repo.
+          - test_name: webp-stackup-colours
+            expected_file: pcb.webp
+            pcb_output_webp_use_board_stackup_colors: "true"
           # The export stands alone: no pcb_output_image, and the PNG
           # intermediate must not survive into the workspace.
           - test_name: webp-alongside-png
@@ -61,6 +68,7 @@ jobs:
           pcb_output_webp_height: 600
           pcb_output_webp_autoframe: ${{ matrix.pcb_output_webp_autoframe || false }}
           pcb_output_webp_lossless: ${{ matrix.pcb_output_webp_lossless || false }}
+          pcb_output_webp_use_board_stackup_colors: ${{ matrix.pcb_output_webp_use_board_stackup_colors || false }}
           pcb_output_image: ${{ matrix.pcb_output_image || false }}
 
       - name: Verify output files

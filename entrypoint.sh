@@ -441,6 +441,7 @@ if [[ -n $INPUT_PCB_FILE_NAME ]]; then
       --zoom "$INPUT_PCB_OUTPUT_IMAGE_ZOOM" \
       --rotate "$INPUT_PCB_OUTPUT_IMAGE_ROTATE" \
     )
+    [[ $INPUT_PCB_OUTPUT_IMAGE_USE_BOARD_STACKUP_COLORS == "true" ]] && cmd+=(--use-board-stackup-colors)
     [[ $INPUT_PCB_OUTPUT_IMAGE_PERSPECTIVE == "true" ]] && cmd+=(--perspective)
     [[ $INPUT_PCB_OUTPUT_IMAGE_FLOOR == "true" ]] && cmd+=(--floor)
     "${cmd[@]}" "$INPUT_PCB_FILE_NAME"

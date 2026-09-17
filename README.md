@@ -556,6 +556,17 @@ Description: Output file name of GLB PCB.
 
 > **Note:** a further 23 `pcb_output_glb_*` inputs tune the exported layers, materials, node naming and transform. See [docs/glb-export.md](docs/glb-export.md) for the full list, what the defaults do and why.
 
+## `pcb_output_image_use_board_stackup_colors`
+
+Required: `false`\
+Default: `false`\
+\
+Description: Render with the colours from the board's physical stackup rather
+than the 3D viewer preset's. `kicad-cli` renders every board in its default
+colours — a green soldermask whatever the stackup says — unless this is set,
+because `--use-board-stackup-colors` is opt-in. Requires the stackup to carry
+colours (Board Setup → Physical Stackup).
+
 ## `pcb_output_webp`
 
 Required: `false`\
@@ -574,9 +585,10 @@ Default: `pcb.webp`\
 \
 Description: Output file name of WebP PCB. Must end in `.webp`.
 
-> **Note:** a further 13 `pcb_output_webp_*` inputs set the render — `side`,
+> **Note:** a further 14 `pcb_output_webp_*` inputs set the render — `side`,
 > `width`, `height`, `background`, `zoom`, `rotate`, `floor`, `perspective`,
-> `quality`, `autoframe`, `autoframe_margin` — and the encoding —
+> `quality`, `autoframe`, `autoframe_margin`,
+> `use_board_stackup_colors` — and the encoding —
 > `encode_quality`, `lossless`. The render ones mirror `pcb_output_image_*`,
 > so settings copy across unchanged. See
 > [docs/glb-export.md](docs/glb-export.md#exporting-a-webp) for the two

@@ -232,6 +232,27 @@ promise: kicad-cli renders close to them but not exactly, returning 784x592 for
 a requested 800x600. If something downstream needs an exact canvas — a shop
 grid, say — resize there rather than assuming these values land.
 
+### Board colours
+
+`kicad-cli pcb render` does not use the board's stackup colours unless asked:
+`--use-board-stackup-colors` is opt-in, and without it every board renders in
+the 3D viewer preset's colours — a green soldermask whatever
+`(color "Black")` in the stackup says. The colour is read and then not used.
+
+`pcb_output_webp_use_board_stackup_colors`, and
+`pcb_output_image_use_board_stackup_colors` for the image export, pass that
+flag. Both default to `false`, which is what kicad-cli does on its own.
+
+It needs the stackup to actually carry colours, which only happens once the
+physical stackup has been set in Board Setup. Check a board with:
+
+```sh
+grep -A30 '(stackup' board.kicad_pcb | grep color
+```
+
+Nothing there means the colour is not in the design file at all, and no flag
+will conjure it.
+
 ### Framing and quality
 
 `pcb_output_webp_autoframe` crops to the board before converting, the same
