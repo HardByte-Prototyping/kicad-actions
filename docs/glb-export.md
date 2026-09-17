@@ -202,6 +202,66 @@ Needs a PNG with an alpha channel. An opaque background, a JPEG, or anything
 that is not an 8-bit RGBA PNG warns and leaves the image as rendered, because a
 missing crop is cosmetic and a corrupted release asset is not.
 
+## Exporting a WebP
+
+`pcb_output_webp` is its own export, the way `pcb_output_image` and
+`pcb_output_svg` are. It does not need `pcb_output_image`, and it carries its
+own side, size, framing and quality rather than borrowing that block's.
+
+```yaml
+pcb_output_webp: true
+pcb_output_webp_file_name: board.webp
+pcb_output_webp_side: top
+pcb_output_webp_width: 1600
+pcb_output_webp_height: 900
+```
+
+`kicad-cli` renders PNG and JPEG and nothing else, so the export renders a PNG
+and converts it. The PNG is an intermediate: it is written outside the
+workspace and removed, so the export produces exactly one file and nothing a
+later `upload-artifact` step can glob up by accident.
+
+The settings are separate on purpose. A web asset is usually not the picture
+you want archived — smaller, cropped tighter, often a different angle — and
+tying the two together would mean neither could move without the other. Set
+both blocks to the same values and you get the same picture in both formats,
+at the cost of rendering it twice.
+
+`pcb_output_webp_width` and `pcb_output_webp_height` are a request, not a
+promise: kicad-cli renders close to them but not exactly, returning 784x592 for
+a requested 800x600. If something downstream needs an exact canvas — a shop
+grid, say — resize there rather than assuming these values land.
+
+### Framing and quality
+
+`pcb_output_webp_autoframe` crops to the board before converting, the same
+measurement [Framing the rendered image](#framing-the-rendered-image)
+describes, done on the intermediate where the alpha channel still says where
+the board is. It needs the background left at `default` or set to
+`transparent`; an opaque one warns and converts the render as-is.
+
+Two quality settings, because there are two lossy steps and they are unrelated:
+
+| Input | Default | What it sets |
+| --- | --- | --- |
+| `pcb_output_webp_quality` | `basic` | how the board is raytraced — `basic`, `high`, `user`, the same values as `pcb_output_image_quality` |
+| `pcb_output_webp_encode_quality` | `82` | how the WebP is compressed, 0–100 |
+
+The names mirror the image block deliberately, so a copied render setting keeps
+working. Passing `82` to the render quality is caught with a message naming the
+other input.
+
+Alpha is always encoded losslessly whatever the encode quality, because a
+transparent render gets composited over a page background and that is exactly
+where a lossy alpha channel shows up — as a halo tracing the board outline.
+`pcb_output_webp_lossless` makes the colour lossless too; on a board render,
+which is flat colour and sharp silkscreen, that costs less than it would on a
+photograph, but the file is still several times the lossy one.
+
+The encoder is `cwebp`, which the action's image installs. A missing `cwebp`
+fails the export rather than warning, and fails before the render rather than
+after it, so a typo does not cost a minute of raytracing to discover.
+
 ## Notes for PlayCanvas
 
 - glTF units are metres, so a 100 mm board arrives as 0.1 units. Either scale

@@ -556,6 +556,32 @@ Description: Output file name of GLB PCB.
 
 > **Note:** a further 23 `pcb_output_glb_*` inputs tune the exported layers, materials, node naming and transform. See [docs/glb-export.md](docs/glb-export.md) for the full list, what the defaults do and why.
 
+## `pcb_output_webp`
+
+Required: `false`\
+Default: `false`\
+\
+Description: Run the WebP export of the PCB. `kicad-cli` renders PNG and JPEG
+only, so this renders and converts; the PNG is an intermediate and is removed,
+leaving only the WebP. Independent of `pcb_output_image`, with its own render
+settings. See
+[docs/glb-export.md](docs/glb-export.md#exporting-a-webp).
+
+## `pcb_output_webp_file_name`
+
+Required: `false`\
+Default: `pcb.webp`\
+\
+Description: Output file name of WebP PCB. Must end in `.webp`.
+
+> **Note:** a further 13 `pcb_output_webp_*` inputs set the render — `side`,
+> `width`, `height`, `background`, `zoom`, `rotate`, `floor`, `perspective`,
+> `quality`, `autoframe`, `autoframe_margin` — and the encoding —
+> `encode_quality`, `lossless`. The render ones mirror `pcb_output_image_*`,
+> so settings copy across unchanged. See
+> [docs/glb-export.md](docs/glb-export.md#exporting-a-webp) for the two
+> quality settings and why they are separate.
+
 # 📤 Outputs
 
 This action exports multiple files based on the inputs that are given.
