@@ -333,6 +333,31 @@ inputs:
     description: "Six-digit hex overriding the board substrate colour, for example '1A1A1A'. Only useful with 'pcb_output_glb_mask_opacity' below 1: the mask is translucent everywhere, not only over copper, so KiCad's default tan substrate shows through as brown across the whole board. Setting this dark keeps bare areas reading as the mask colour while copper still shows through. Requires 'pcb_output_glb_optimize'."
     default: ""
 
+  # GLB mesh optimization
+  pcb_output_glb_optimize_mesh:
+    description: "Merge the exported primitives by material and quantize the vertices with gltfpack. kicad-cli emits one primitive per OpenCASCADE face, which is tens of thousands of draw calls for a board of under a million triangles; merging them is what makes the export usable in a real-time renderer. Node and material names are preserved."
+    default: true
+
+  pcb_output_glb_compression:
+    description: "Mesh compression applied after merging. Options: 'meshopt', 'meshopt-high', 'none'. 'meshopt' writes EXT_meshopt_compression, which PlayCanvas and three.js decode with their meshopt decoder registered; 'meshopt-high' compresses further at the same decode cost; 'none' leaves the geometry uncompressed. Requires 'pcb_output_glb_optimize_mesh'."
+    default: "meshopt"
+
+  pcb_output_glb_quantize:
+    description: "Quantize vertex attributes to integers with KHR_mesh_quantization. This is most of the size reduction before compression. Turn it off for a loader that supports no glTF extensions at all. Requires 'pcb_output_glb_optimize_mesh'."
+    default: true
+
+  pcb_output_glb_position_bits:
+    description: "Bits of precision per vertex position, from 1 to 16. The default of 14 resolves about 0.01 mm across a 170 mm board. Requires 'pcb_output_glb_quantize'."
+    default: "14"
+
+  pcb_output_glb_simplify:
+    description: "Decimate the meshes to this fraction of their triangle count, above 0 and up to 1, for example '0.5'. Off by default: merging and compression are lossless, and this is not. Requires 'pcb_output_glb_optimize_mesh'."
+    default: "1.0"
+
+  pcb_output_glb_simplify_error:
+    description: "Deviation budget for 'pcb_output_glb_simplify', from 0 to 1, where 0.01 allows 1% of the mesh size. Simplification stops at this error even if the target ratio is not reached."
+    default: "0.01"
+
   # PCB image output
   pcb_output_image:
     description: "Run the image export of the PCB."

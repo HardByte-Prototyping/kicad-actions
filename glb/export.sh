@@ -116,4 +116,8 @@ if [[ $INPUT_PCB_OUTPUT_GLB == "true" ]]; then
       "${pp[@]}"
     fi
   fi
+
+  # Geometry, after the naming above: gltfpack preserves the names it is given
+  # and merges nothing across them, so the pass has to run second.
+  source /glb/optimize.sh
 fi
