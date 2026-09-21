@@ -285,6 +285,10 @@ inputs:
     description: "Substitute STEP or IGS models for VRML models with the same name."
     default: false
 
+  pcb_output_glb_wrl_fallback:
+    description: "Re-point a footprint's missing .wrl 3D model at the .step beside it for the duration of the export. KiCad 9 dropped the VRML models from the stock library, so a board authored earlier loses those components silently. Unlike 'pcb_output_glb_subst_models', this applies to a .wrl that is not on disk at all."
+    default: true
+
   pcb_output_glb_fuse_shapes:
     description: "Fuse overlapping geometry together. Slower, but reduces coincident surfaces."
     default: false

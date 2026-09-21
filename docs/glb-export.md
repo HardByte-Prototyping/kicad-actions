@@ -126,7 +126,9 @@ reported as a warning, which catches typos.
 
 This fork builds on `kicad/kicad:10.0-full`, which ships the stock KiCad 3D
 model library at `/usr/share/kicad/3dmodels`, so footprints referencing
-`${KICAD10_3DMODEL_DIR}` and friends export with their meshes.
+`${KICAD10_3DMODEL_DIR}` and friends export with their meshes — as long as the
+reference is to a `.step`. The library is `.step`-only; see
+[Boards authored before KiCad 9](#boards-authored-before-kicad-9) below.
 
 The plain `kicad/kicad:10.0` tag upstream uses does **not**: the official
 Dockerfile clones `kicad-packages3D` only under `--build-arg include_3d=true`,
@@ -145,6 +147,36 @@ KiCad only defines the variable for its own major version, so a board authored
 in KiCad 8 that refers to `${KICAD8_3DMODEL_DIR}` would otherwise lose every
 component when exported by KiCad 10 — the GUI migrates those references, but
 `kicad-cli` does not.
+
+### Boards authored before KiCad 9
+
+The variable name is only half of that problem. KiCad 9 removed the VRML models
+from the stock library, so `kicad-packages3D` in the `-full` image ships
+`Battery.3dshapes/BatteryHolder_Bulgin_BX0036_1xC.step` and no `.wrl` at all. A
+board authored in KiCad 8 still points at the `.wrl`, which now resolves to
+nothing: the component is dropped from the export with only a
+`Could not add 3D model` line to show for it, and no non-zero exit code.
+
+No value of `KICAD8_3DMODEL_DIR` fixes this, because the file the reference
+names does not exist under any prefix.
+
+`pcb_output_glb_wrl_fallback` (on by default) handles it. Before the export it
+rewrites each `.wrl` reference whose file is missing to the `.step` beside it,
+leaving the `${...}` variable exactly as written so KiCad resolves the path the
+same way; the board file is restored immediately after `kicad-cli` returns,
+including on the error paths. A `.wrl` that *is* on disk is left alone — it is
+the board's own model, and quietly preferring a sibling `.step` would change
+what gets exported.
+
+`pcb_output_glb_subst_models` is the option that looks like it should cover
+this and does not: measured byte-identical output on 2026-09-21. KiCad's
+substitution operates on a model that resolved, and a missing file never gets
+that far.
+
+Two things the fallback cannot do: it will not invent a model where the library
+has neither extension (it warns, per reference), and it does not touch the
+board in your repository — the rewrite lasts for the duration of one export.
+The permanent fix is still to re-point the footprints in the board itself.
 
 ## Vias
 
@@ -496,6 +528,17 @@ Required: `false`\
 Default: `false`\
 \
 Description: Substitute STEP or IGS models for VRML models with the same name.
+
+## `pcb_output_glb_wrl_fallback`
+
+Required: `false`\
+Default: `true`\
+\
+Description: Re-point a footprint's missing `.wrl` 3D model at the `.step`
+beside it for the duration of the export. KiCad 9 dropped the VRML models from
+the stock library, so a board authored earlier loses those components silently.
+Unlike `pcb_output_glb_subst_models`, this applies to a `.wrl` that is not on
+disk at all. See [Boards authored before KiCad 9](#boards-authored-before-kicad-9).
 
 ## `pcb_output_glb_fuse_shapes`
 
