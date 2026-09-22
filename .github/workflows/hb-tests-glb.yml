@@ -50,6 +50,19 @@ jobs:
             pcb_output_glb_tracks: true
             pcb_output_glb_zones: true
             pcb_output_glb_mask_opacity: "0.83"
+          - test_name: glb-mesh-uncompressed
+            expected_file: pcb.glb
+            pcb_output_glb_compression: none
+          - test_name: glb-mesh-unquantized
+            expected_file: pcb.glb
+            pcb_output_glb_quantize: "false"
+          - test_name: glb-mesh-simplified
+            expected_file: pcb.glb
+            pcb_output_glb_simplify: "0.5"
+          - test_name: glb-mesh-off
+            expected_file: pcb.glb
+            # Quoted so the '||' default below does not treat it as unset.
+            pcb_output_glb_optimize_mesh: "false"
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -68,6 +81,10 @@ jobs:
           pcb_output_glb_scale: ${{ matrix.pcb_output_glb_scale || '1.0' }}
           pcb_output_glb_metal_colors: ${{ matrix.pcb_output_glb_metal_colors || null }}
           pcb_output_glb_mask_opacity: ${{ matrix.pcb_output_glb_mask_opacity || '1.0' }}
+          pcb_output_glb_optimize_mesh: ${{ matrix.pcb_output_glb_optimize_mesh || 'true' }}
+          pcb_output_glb_compression: ${{ matrix.pcb_output_glb_compression || 'meshopt' }}
+          pcb_output_glb_quantize: ${{ matrix.pcb_output_glb_quantize || 'true' }}
+          pcb_output_glb_simplify: ${{ matrix.pcb_output_glb_simplify || '1.0' }}
 
       - name: Verify output file
         run: |
@@ -86,95 +103,34 @@ jobs:
           fi
         shell: bash
 
-      # The magic bytes prove it is a GLB, not that post-processing did its
-      # job. A recentre that composes wrongly with --scale, an OpenCASCADE
-      # label left in a node name or a board layer still set to BLEND all
-      # produce a perfectly valid GLB, so assert the outcomes directly.
+      # The magic bytes prove it is a GLB, not that the passes that were
+      # asked for ran. A recentre that composes wrongly with --scale, an
+      # OpenCASCADE label left in a node name, a board layer still set to
+      # BLEND or a mesh optimization that quietly did nothing all produce a
+      # perfectly valid GLB, so assert the outcomes directly.
+      #
+      # The checker lives in a file rather than a heredoc so it can be run
+      # against a real board by hand:
+      #   python3 tests/verify-glb.py board.glb --mask-opacity 0.83 \
+      #     --optimized-mesh --compressed
       - name: Verify post-processing
         if: ${{ matrix.pcb_output_glb_optimize != 'false' }}
         run: |
-          python3 - "${{ matrix.expected_file }}" "${{ matrix.pcb_output_glb_scale || '1.0' }}" "${{ matrix.pcb_output_glb_mask_opacity || '1.0' }}" <<'PY'
-          import json, re, struct, sys
-
-          path, scale, mask_opacity = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
-          data = open(path, "rb").read()
-          off, gltf = 12, None
-          while off < len(data):
-              ln, kind = struct.unpack_from("<I4s", data, off)
-              if kind == b"JSON":
-                  gltf = json.loads(data[off + 8:off + 8 + ln])
-                  break
-              off += 8 + ln
-          assert gltf is not None, "no JSON chunk"
-
-          nodes = gltf.get("nodes", [])
-          fails = []
-
-          # 1. nothing unaddressable left behind
-          occt = re.compile(r"^=>\[?[\d:]+\]?$")
-          stray = [n.get("name") for n in nodes if occt.match(n.get("name") or "")]
-          if stray:
-              fails.append(f"OpenCASCADE label paths left in node names: {stray[:5]}")
-          matn = [m.get("name") for m in gltf.get("materials", [])
-                  if re.match(r"^mat_\d+$", m.get("name") or "")]
-          if matn:
-              fails.append(f"unnamed materials left behind: {matn[:5]}")
-
-          # 2. board layers must be opaque, or they z-fight while orbiting.
-          #    With a mask opacity below 1 the soldermask alone may (and
-          #    must) stay blended, at exactly that alpha.
-          mats = gltf.get("materials", [])
-          is_mask = lambda m: (m.get("name") or "").startswith("SolderMask")
-          blend = [m.get("name") for m in mats
-                   if m.get("alphaMode") == "BLEND"
-                   and not (mask_opacity < 1.0 and is_mask(m))]
-          if blend:
-              fails.append(f"materials still alphaMode BLEND: {blend[:5]}")
-          if mask_opacity < 1.0:
-              masks = [m for m in mats if is_mask(m)]
-              if not masks:
-                  fails.append("no SolderMask material found to keep translucent")
-              for m in masks:
-                  alpha = m.get("pbrMetallicRoughness", {}).get("baseColorFactor", [1, 1, 1, 1])[3]
-                  if m.get("alphaMode") != "BLEND" or abs(alpha - mask_opacity) > 1e-3:
-                      fails.append(f"{m.get('name')}: expected BLEND at alpha {mask_opacity}, "
-                                   f"got {m.get('alphaMode', 'OPAQUE')} at {alpha}")
-
-          # 3. the recentre must survive composition with the scale. glTF
-          #    composes a node as M = T * R * S, so the translation is applied
-          #    after the scale and has to be pre-multiplied by it.
-          board = None
-          for mesh in gltf.get("meshes", []):
-              if (mesh.get("name") or "").endswith("_PCB") or mesh.get("name") == "Board":
-                  board = mesh
-                  break
-          if board is None:
-              print("note: no board mesh found; skipping the recentre check")
-          else:
-              acc = gltf["accessors"]
-              lo = [float("inf")] * 3
-              hi = [float("-inf")] * 3
-              for prim in board.get("primitives", []):
-                  a = acc[prim["attributes"]["POSITION"]]
-                  if "min" not in a or "max" not in a:
-                      continue
-                  for i in range(3):
-                      lo[i] = min(lo[i], a["min"][i])
-                      hi[i] = max(hi[i], a["max"][i])
-              centre = [(lo[i] + hi[i]) / 2.0 for i in range(3)]
-              root = nodes[gltf["scenes"][gltf.get("scene", 0)]["nodes"][0]]
-              t = root.get("translation", [0.0, 0.0, 0.0])
-              sc = root.get("scale", [1.0, 1.0, 1.0])
-              final = [sc[i] * centre[i] + t[i] for i in range(3)]
-              tol = 1e-4 * max(1.0, scale)
-              if any(abs(v) > tol for v in final):
-                  fails.append(
-                      f"board centre sits at {[round(v, 4) for v in final]} after "
-                      f"the root transform, not the origin (scale={scale}, "
-                      f"translation={t})")
-
-          for f in fails:
-              print(f"::error::{path}: {f}")
-          sys.exit(1 if fails else 0)
-          PY
+          flags=()
+          if [[ "${{ matrix.pcb_output_glb_optimize_mesh || 'true' }}" == "true" ]]; then
+            # On this test board the primitive count is low enough before
+            # merging that the checker's ceiling cannot fail; what proves
+            # gltfpack ran here is the extensions it is required to write.
+            flags+=(--optimized-mesh)
+            case "${{ matrix.pcb_output_glb_compression || 'meshopt' }}" in
+              meshopt|meshopt-high) flags+=(--compressed) ;;
+            esac
+            if [[ "${{ matrix.pcb_output_glb_quantize || 'true' }}" != "true" ]]; then
+              flags+=(--unquantized)
+            fi
+          fi
+          python3 tests/verify-glb.py "${{ matrix.expected_file }}" \
+            --scale "${{ matrix.pcb_output_glb_scale || '1.0' }}" \
+            --mask-opacity "${{ matrix.pcb_output_glb_mask_opacity || '1.0' }}" \
+            "${flags[@]}"
         shell: bash

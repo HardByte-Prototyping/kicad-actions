@@ -42,7 +42,8 @@ copper. See [`pcb_output_glb_mask_opacity`](#pcb_output_glb_mask_opacity).
 `kicad-cli` produces its GLB through OpenCASCADE, which targets CAD viewers.
 Several of its choices look wrong in a real-time renderer, so
 `pcb_output_glb_optimize` (on by default) rewrites the glTF metadata. Geometry
-is never touched, so the pass is lossless.
+is never touched by this pass; reducing it is
+[`pcb_output_glb_optimize_mesh`](#mesh-optimization)'s job.
 
 | Issue | What KiCad emits | What the renderer does with it | Fix |
 | --- | --- | --- | --- |
@@ -283,6 +284,93 @@ The encoder is `cwebp`, which the action's image installs. A missing `cwebp`
 fails the export rather than warning, and fails before the render rather than
 after it, so a typo does not cost a minute of raytracing to discover.
 
+## Mesh optimization
+
+`kicad-cli` emits one glTF primitive per OpenCASCADE face. A real 170 mm
+carrier board comes out of the exporter like this:
+
+| | exported | after optimization |
+| --- | --- | --- |
+| File size | 49.4 MB | **3.8 MB** |
+| Draw calls | 62,553 | **174** |
+| Accessors | 138,849 | 522 |
+| Triangles | 979,626 | 857,176 |
+
+Sixteen triangles per draw call is what makes the raw export unusable in a
+real-time renderer, and it is not the triangle count that does it. The
+accessor table needed to describe 62,553 primitives is the other half: it put
+22 MB of JSON in that 49 MB file, with the copper layer alone accounting for
+16,005 primitives and pads another 11,548.
+
+`pcb_output_glb_optimize_mesh` (on by default) runs the export through
+[gltfpack](https://github.com/zeux/meshoptimizer/tree/master/gltf), which
+merges the primitives that share a material, welds and quantizes the vertices,
+and applies meshopt compression. It runs after the post-processing, because it
+preserves the names it is given and merges nothing across them.
+
+**Names survive it.** Every node the post-processing creates — `PCB`, `Board`,
+`SolderMask_Front`, `Copper_Front`, `Pads`, each reference designator — and
+every colour-derived material name like `Component_EDBE51` is still there and
+still addressable afterwards. gltfpack is always run with `-kn -km` for
+exactly this reason, and those flags are deliberately not exposed as inputs:
+without them it merges across nodes and renames what it merged, which would
+undo the naming and silently break every material override and engine script
+written against it. They cost merging opportunities, and the names are worth
+more. One thing does change — the *mesh* names are dropped, so address the
+geometry through the node, which is the durable handle.
+
+### What the renderer needs
+
+The default output declares two extensions:
+
+| Extension | From | Needed by |
+| --- | --- | --- |
+| `KHR_mesh_quantization` | `pcb_output_glb_quantize` | any loader; widely supported |
+| `EXT_meshopt_compression` | `pcb_output_glb_compression` | a registered meshopt decoder |
+
+PlayCanvas supports both out of the box. three.js needs `MeshoptDecoder`
+registered on the `GLTFLoader`. For a loader that can do neither, set
+`pcb_output_glb_compression: none` and `pcb_output_glb_quantize: false` — the
+merging is what matters most and it needs no extension at all.
+
+Measured on the same board:
+
+| Setting | Size | Extensions |
+| --- | --- | --- |
+| default (`meshopt`) | 3.8 MB | quantization + compression |
+| `meshopt-high` | 3.3 MB | quantization + compression |
+| `compression: none` | 19.2 MB | quantization |
+| `quantize: false` | 9.1 MB | compression |
+| `simplify: 0.5` | 2.4 MB | quantization + compression |
+| `optimize_mesh: false` | 49.4 MB | none |
+
+`meshopt-high` costs nothing at decode time; it spends longer choosing the
+encoding. There is no reason not to use it other than export time, which is
+under two seconds either way.
+
+### Simplification
+
+`pcb_output_glb_simplify` decimates the mesh to a fraction of its triangles and
+is **off by default**, because everything else on this page is lossless and
+this is not. It is the knob to reach for only once the file is still too large
+with compression on — on the board above, halving the triangles saved 1.4 MB
+against 3.8, while merging and compression had already saved 45.6.
+
+`pcb_output_glb_simplify_error` bounds the deviation, defaulting to 1% of the
+mesh size; simplification stops there even if the ratio is not reached. Border
+vertices are locked whenever simplification runs, because a board is many
+separate solids meeting at shared edges, and collapsing a vertex on such an
+edge opens a gap that reads as a hole rather than as a lower triangle count.
+
+### Precision
+
+`pcb_output_glb_position_bits` sets the quantization grid, 14 bits by default,
+which resolves about 0.01 mm across a 170 mm board — finer than the export's
+own `pcb_output_glb_min_distance` default of 0.01 mm. Dropping to 10 bits took
+that board from 3.8 MB to 2.7 MB, at 0.17 mm per step, which is visible on
+silkscreen edges. Leave it alone unless the file size matters more than the
+board does.
+
 ## Notes for PlayCanvas
 
 - glTF units are metres, so a 100 mm board arrives as 0.1 units. Either scale
@@ -290,8 +378,8 @@ after it, so a typo does not cost a minute of raytracing to discover.
 - The model has no UV channels, because KiCad emits none. Materials are flat
   colours, which is enough for a board but means image textures cannot be
   applied without generating UVs first.
-- The mesh is not Draco or meshopt compressed. If you need that, run
-  `gltf-transform` on the artifact in a later workflow step.
+- The mesh is meshopt compressed by default, so register the meshopt decoder
+  with the loader. See [Mesh optimization](#mesh-optimization).
 
 # 📥 GLB inputs
 
@@ -504,6 +592,66 @@ shows through tinted, the way tracks and tented vias look on a real board.
 warns when that happens. A single blended layer above opaque geometry sorts
 correctly in real-time renderers. It is the full stack of blended layers that
 `pcb_output_glb_keep_transparency` restores which does not.
+
+## `pcb_output_glb_optimize_mesh`
+
+Required: `false`\
+Default: `true`\
+\
+Description: Merge the exported primitives by material and quantize the
+vertices with gltfpack. This is what takes a board from tens of thousands of
+draw calls to a few hundred. Node and material names are preserved. See
+[Mesh optimization](#mesh-optimization).
+
+## `pcb_output_glb_compression`
+
+Required: `false`\
+Default: `meshopt`\
+\
+Description: Mesh compression applied after merging. Options: `meshopt`,
+`meshopt-high`, `none`. `meshopt` writes `EXT_meshopt_compression`, which
+PlayCanvas decodes natively and three.js decodes with `MeshoptDecoder`
+registered. `meshopt-high` compresses further at no extra decode cost.
+`none` leaves the geometry uncompressed for a loader that supports neither.
+Requires `pcb_output_glb_optimize_mesh`.
+
+## `pcb_output_glb_quantize`
+
+Required: `false`\
+Default: `true`\
+\
+Description: Quantize vertex attributes to integers with
+`KHR_mesh_quantization`. This is most of the size reduction before compression
+is applied. Turn it off only for a loader that supports no glTF extensions at
+all. Requires `pcb_output_glb_optimize_mesh`.
+
+## `pcb_output_glb_position_bits`
+
+Required: `false`\
+Default: `14`\
+\
+Description: Bits of precision per vertex position, from 1 to 16. The default
+resolves about 0.01 mm across a 170 mm board. Requires
+`pcb_output_glb_quantize`.
+
+## `pcb_output_glb_simplify`
+
+Required: `false`\
+Default: `1.0`\
+\
+Description: Decimate the meshes to this fraction of their triangle count,
+above 0 and up to 1. `1.0` means no simplification, which is the default:
+merging and compression are lossless and this is not. See
+[Simplification](#simplification).
+
+## `pcb_output_glb_simplify_error`
+
+Required: `false`\
+Default: `0.01`\
+\
+Description: Deviation budget for `pcb_output_glb_simplify`, from 0 to 1,
+where `0.01` allows 1% of the mesh size. Simplification stops at this error
+even if the target ratio has not been reached.
 
 ## `pcb_output_glb_keep_transparency`
 

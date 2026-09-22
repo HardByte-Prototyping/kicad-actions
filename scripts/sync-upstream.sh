@@ -43,7 +43,7 @@ MANUAL_FILES=(README.md)
 declare -A REQUIRED_ONCE=(
   ["entrypoint.sh"]="source /glb/setup.sh|source /img/setup.sh|  source /glb/export.sh|    source /img/autoframe.sh|  source /img/webp.sh"
   ["action.yml"]="  pcb_output_glb:|  pcb_output_webp:"
-  ["Dockerfile"]="COPY glb/ /glb/|COPY img/ /img/|FROM kicad/kicad:10.0-full|    && apt-get -o Acquire::Retries=3 install -y --no-install-recommends webp \\"
+  ["Dockerfile"]="COPY glb/ /glb/|COPY img/ /img/|FROM kicad/kicad:10.0-full|    && apt-get -o Acquire::Retries=3 install -y --no-install-recommends webp \\|FROM debian:bookworm-slim AS gltfpack|COPY --from=gltfpack /build/gltfpack /usr/local/bin/gltfpack"
   ["README.md"]="## \`pcb_output_glb\`"
 )
 

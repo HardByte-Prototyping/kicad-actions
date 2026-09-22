@@ -151,6 +151,15 @@ modification, so it does not widen the exception above, but it gets a
 `REQUIRED_ONCE` marker too — without the encoder the input fails every run,
 and a merge that dropped the layer would otherwise show up only in CI.
 
+`Dockerfile` gained a second stage on 2026-09-18, which builds `gltfpack` from
+a pinned `meshoptimizer` tag for `pcb_output_glb_optimize_mesh`. It is built
+from source rather than fetched as a release archive so the published image
+carries no prebuilt blob, and the stage is discarded — only the binary is
+copied forward. Both its `FROM` and the `COPY --from` carry `REQUIRED_ONCE`
+markers: the marker check is a whole-line match, so the builder stage's `FROM`
+cannot be confused with the `-full` tag line above it. Without the binary the
+input fails every run.
+
 Put new work in `glb/`, `docs/`, `scripts/` or a new workflow file rather than
 in `entrypoint.sh`, `action.yml` or `README.md` where you can help it. If a
 change genuinely must modify an upstream line, drop that file from
