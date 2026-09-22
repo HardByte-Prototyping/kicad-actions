@@ -239,6 +239,38 @@ def check_recentre(gltf, scale, fails):
                      f"space, not the origin (scale={scale}, tolerance={tol:.2e})")
 
 
+def component_present(gltf, refdes):
+    """Whether a footprint's geometry made it into the scene graph.
+
+    The post-processing names a component's mesh node '<refdes>_Model' and an
+    intermediate OpenCASCADE assembly '<refdes>_Assembly', both hanging off a
+    node named for the reference designator itself, and gltfpack may move the
+    mesh down onto an unnamed child of either. So the question is asked of the
+    whole subtree, and asked about a mesh rather than a node: a footprint
+    whose model did not resolve can still leave an empty node behind, and that
+    node is not the component being in the export.
+    """
+    nodes = gltf.get("nodes", [])
+    for idx, node in enumerate(nodes):
+        name = node.get("name") or ""
+        if name != refdes and not name.startswith(refdes + "_"):
+            continue
+        if any("mesh" in nodes[i] for i in subtree(gltf, idx)):
+            return True
+    return False
+
+
+def check_components(gltf, required, forbidden, fails):
+    for refdes in required:
+        if not component_present(gltf, refdes):
+            fails.append(f"component '{refdes}' is missing from the scene graph; "
+                         "its 3D model did not resolve")
+    for refdes in forbidden:
+        if component_present(gltf, refdes):
+            fails.append(f"component '{refdes}' is present although its 3D model "
+                         "was expected not to resolve")
+
+
 def check_optimized(gltf, expect_compression, expect_quantization, fails):
     """The mesh optimization's own outcomes."""
     prims = sum(len(m.get("primitives", [])) for m in gltf.get("meshes", []))
@@ -272,6 +304,12 @@ def main():
                     help="with --optimized-mesh, require EXT_meshopt_compression")
     ap.add_argument("--unquantized", action="store_true",
                     help="with --optimized-mesh, quantization was turned off")
+    ap.add_argument("--require-component", action="append", default=[],
+                    metavar="REFDES",
+                    help="fail unless this footprint's geometry is in the scene")
+    ap.add_argument("--forbid-component", action="append", default=[],
+                    metavar="REFDES",
+                    help="fail if this footprint's geometry is in the scene")
     opts = ap.parse_args()
 
     gltf = read_gltf(opts.path)
@@ -279,6 +317,7 @@ def main():
     check_names(gltf, fails)
     check_materials(gltf, opts.mask_opacity, fails)
     check_recentre(gltf, opts.scale, fails)
+    check_components(gltf, opts.require_component, opts.forbid_component, fails)
     if opts.optimized_mesh:
         check_optimized(gltf, opts.compressed, not opts.unquantized, fails)
 

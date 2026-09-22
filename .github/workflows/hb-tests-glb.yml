@@ -63,6 +63,12 @@ jobs:
             expected_file: pcb.glb
             # Quoted so the '||' default below does not treat it as unset.
             pcb_output_glb_optimize_mesh: "false"
+          # The test board is the reproduction case: BT101 and SW101 reference
+          # a .wrl the image does not ship, D101 a .step it does.
+          - test_name: glb-wrl-fallback-off
+            expected_file: pcb.glb
+            # Quoted so the '||' default below does not treat it as unset.
+            pcb_output_glb_wrl_fallback: "false"
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -85,6 +91,7 @@ jobs:
           pcb_output_glb_compression: ${{ matrix.pcb_output_glb_compression || 'meshopt' }}
           pcb_output_glb_quantize: ${{ matrix.pcb_output_glb_quantize || 'true' }}
           pcb_output_glb_simplify: ${{ matrix.pcb_output_glb_simplify || '1.0' }}
+          pcb_output_glb_wrl_fallback: ${{ matrix.pcb_output_glb_wrl_fallback || 'true' }}
 
       - name: Verify output file
         run: |
@@ -128,6 +135,21 @@ jobs:
             if [[ "${{ matrix.pcb_output_glb_quantize || 'true' }}" != "true" ]]; then
               flags+=(--unquantized)
             fi
+          fi
+          # BT101 references '...BatteryHolder_Bulgin_BX0036_1xC.wrl', and the
+          # -full image ships that model as .step only, so whether the
+          # component reaches the GLB is exactly the fallback's outcome. Not
+          # asserted for a board-only export, which has no components at all.
+          if [[ "${{ matrix.pcb_output_glb_board_only || 'false' }}" != "true" ]]; then
+            if [[ "${{ matrix.pcb_output_glb_wrl_fallback || 'true' }}" == "true" ]]; then
+              flags+=(--require-component BT101)
+            else
+              flags+=(--forbid-component BT101)
+            fi
+            # Unconditional: D101's model is a .step already, so it is the
+            # control that separates "the fallback worked" from "components
+            # export at all".
+            flags+=(--require-component D101)
           fi
           python3 tests/verify-glb.py "${{ matrix.expected_file }}" \
             --scale "${{ matrix.pcb_output_glb_scale || '1.0' }}" \

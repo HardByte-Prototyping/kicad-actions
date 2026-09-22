@@ -554,7 +554,7 @@ Default: `pcb.glb`\
 \
 Description: Output file name of GLB PCB.
 
-> **Note:** a further 31 `pcb_output_glb_*` inputs tune the exported layers, materials, node naming, transform and mesh optimization. See [docs/glb-export.md](docs/glb-export.md) for the full list, what the defaults do and why.
+> **Note:** a further 32 `pcb_output_glb_*` inputs tune the exported layers, materials, node naming, transform and mesh optimization. See [docs/glb-export.md](docs/glb-export.md) for the full list, what the defaults do and why.
 
 ## `pcb_output_image_use_board_stackup_colors`
 

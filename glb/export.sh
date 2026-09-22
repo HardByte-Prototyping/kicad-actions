@@ -3,6 +3,16 @@
 # INPUT_PCB_OUTPUT_GLB_* variables, $model_dir and $model_dir_var, and
 # inherits 'set -e' from the caller.
 
+# Undo the 3D model re-pointing below. The board is the user's file and every
+# later output in this run reads it, so the edit has to come back out whichever
+# way this script leaves -- including the error paths, via the EXIT trap.
+glb_restore_pcb() {
+  [[ -n ${glb_pcb_backup:-} && -f ${glb_pcb_backup:-} ]] || return 0
+  cp -p "$glb_pcb_backup" "$INPUT_PCB_FILE_NAME"
+  rm -f "$glb_pcb_backup"
+  glb_pcb_backup=""
+}
+
 if [[ $INPUT_PCB_OUTPUT_GLB == "true" ]]; then
   if [[ ! $INPUT_PCB_OUTPUT_GLB_FILE_NAME =~ \.glb$ ]]; then
     echo "::error::Invalid GLB file name. Make sure your GLB file name ends with '.glb'."
@@ -84,10 +94,34 @@ if [[ $INPUT_PCB_OUTPUT_GLB == "true" ]]; then
       ;;
   esac
 
+  # Stock components authored before KiCad 9 reference a .wrl that the -full
+  # image no longer ships, and are dropped from the export with only a "Could
+  # not add 3D model" line to show for it. Re-point those to the .step beside
+  # them for the duration of this export; glb/wrl_fallback.py records why
+  # --subst-models does not cover it.
+  glb_pcb_backup=""
+  if [[ $INPUT_PCB_OUTPUT_GLB_WRL_FALLBACK == "true" &&
+        $INPUT_PCB_OUTPUT_GLB_COMPONENTS == "true" &&
+        $INPUT_PCB_OUTPUT_GLB_BOARD_ONLY != "true" ]]; then
+    if ! command -v python3 &> /dev/null; then
+      echo "::warning::python3 not found; skipping the .wrl 3D model fallback. Components referencing a .wrl that is not in the image will be missing from the GLB."
+    else
+      glb_pcb_backup=$(mktemp)
+      cp -p "$INPUT_PCB_FILE_NAME" "$glb_pcb_backup"
+      trap glb_restore_pcb EXIT
+      python3 /glb/wrl_fallback.py "$INPUT_PCB_FILE_NAME"
+    fi
+  fi
+
   set +e
   "${cmd[@]}" "$INPUT_PCB_FILE_NAME"
   pcb_glb_failure=$?
   set -e
+
+  # As early as possible: nothing after this point reads the board file, and
+  # leaving it rewritten for a later step is the failure mode worth avoiding.
+  glb_restore_pcb
+  trap - EXIT
   # kicad-cli can return 2 on success for 3D exports, the same way the STEP
   # export does, so only fail if the code is neither 0 nor 2.
   if [[ $pcb_glb_failure -ne 0 && $pcb_glb_failure -ne 2 ]]; then
